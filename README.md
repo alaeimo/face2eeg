@@ -1,6 +1,6 @@
 # Face2EEG
 
-> **Official implementation of the paper.** *Paper title, authors, and venue are being finalized and will be filled in once the manuscript is accepted.*
+> **Official implementation of the paper.** *Within-Participant Estimation of Preprocessed EEG Signals from Facial Video: Comparison with Joint EOG Regression Across Fz, Pz, and Oz*
 
 **Face2EEG** is a research codebase for predicting frontal-channel EEG from facial video on the DEAP dataset. It reproduces every experiment, figure, and table reported in the paper under a single, reproducible pipeline, with strict attention to group-aware cross-validation, trial-level statistics, and reviewer-requested control analyses.
 

@@ -6,7 +6,7 @@ Experiment runners.
 `eog_baseline` is torch-free.
 """
 from .eog_baseline import run_eog_regression, eog_regression_fold
-
+from .eog_shuffled import make_derangement, eog_shuffled_regression_fold, run_shuffled_eog_regression
 
 def __getattr__(name):
     """Lazily import torch-dependent runners."""
@@ -24,4 +24,7 @@ __all__ = [
     'eog_regression_fold',
     'run_kfold_pipeline',
     'run_trivial_baselines',
+    'make_derangement',
+    'eog_shuffled_regression_fold',
+    'run_shuffled_eog_regression'
 ]

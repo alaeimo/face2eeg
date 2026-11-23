@@ -2548,3 +2548,195 @@ def plot_supplementary_spectral_heatmaps(
         fig.savefig(file_name, dpi=400, bbox_inches="tight", facecolor="white", pad_inches=0.05)
 
     return fig, axes
+
+def plot_eog_shuffled_pairing_summary(
+    df_subject,
+    df_group,
+    subjects,
+    channels=("Fz", "Pz", "Oz"),
+    conditions=(
+        "EOG model",
+        "Shuffled-pairing model, original-target scoring",
+    ),
+    labels=("EOG model", "Shuffled (orig. target)"),
+    save_fig=False,
+    file_name="eog_shuffled_pairing_null_models.pdf",
+    seed=42,
+):
+    """Plot Fisher-z aggregated Pearson r and RMSE for EOG and shuffled-pairing models across EEG channels."""
+    from matplotlib.lines import Line2D
+
+    colors = ("#1f77b4", "#ff7f0e")
+    pair_color = "0.78"
+    rng = np.random.default_rng(seed)
+
+    if len(conditions) != 2 or len(labels) != 2:
+        raise ValueError("Exactly two conditions and two labels are required.")
+
+    def resolve_column(df, candidates):
+        for col in candidates:
+            if col in df.columns:
+                return col
+        raise KeyError(f"None of the expected columns found: {candidates}")
+
+    # Support both analysis-table and existing plotting-helper column names.
+    r_sub_col = resolve_column(df_subject, ("Fisher-z pooled r", "Pooled r", "r_fisher_z_aggregated"))
+    rmse_sub_col = resolve_column(df_subject, ("Trial-level RMSE", "Mean trial RMSE"))
+    r_group_col = resolve_column(df_group, ("Participant-aggregated r", "Population r", "r"))
+    r_lo_col = resolve_column(df_group, ("r CI Low", "r 95% CI low", "r_CI_low"))
+    r_hi_col = resolve_column(df_group, ("r CI High", "r 95% CI high", "r_CI_high"))
+    rmse_group_col = resolve_column(df_group, ("Mean participant-level RMSE", "Population RMSE"))
+    rmse_lo_col = resolve_column(df_group, ("RMSE CI Low", "RMSE 95% CI low"))
+    rmse_hi_col = resolve_column(df_group, ("RMSE CI High", "RMSE 95% CI high"))
+
+    centers = np.arange(len(channels), dtype=float) * 1.35
+    offsets = (-0.16, 0.16)
+    jitter = {
+        (ch, sid): rng.uniform(-0.045, 0.045)
+        for ch in channels for sid in subjects
+    }
+
+    data = {}
+    for ch in channels:
+        sub = df_subject[df_subject["Channel"] == ch]
+        pop = df_group[df_group["Channel"] == ch]
+
+        if sub.duplicated(["Subject", "Condition"]).any():
+            raise ValueError(f"Duplicate participant-condition rows for {ch}.")
+        if pop.duplicated(["Condition"]).any():
+            raise ValueError(f"Duplicate population-condition rows for {ch}.")
+
+        data[ch] = {
+            "r": sub.pivot(index="Subject", columns="Condition", values=r_sub_col).reindex(index=subjects, columns=conditions),
+            "rmse": sub.pivot(index="Subject", columns="Condition", values=rmse_sub_col).reindex(index=subjects, columns=conditions),
+            "population": pop.set_index("Condition"),
+        }
+
+        for condition in conditions:
+            if condition not in data[ch]["population"].index:
+                raise ValueError(f"Missing population estimate for {ch}, {condition}.")
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5), gridspec_kw={"wspace": 0.28})
+
+    panels = (
+        {
+            "ax": axes[0], "letter": "a", "title": "Correlation",
+            "metric": "r", "ylabel": "Fisher-$z$ aggregated Pearson $r$",
+            "group": r_group_col, "low": r_lo_col, "high": r_hi_col,
+            "reference": 0.0, "lower": -1.0, "upper": 1.0,
+        },
+        {
+            "ax": axes[1], "letter": "b", "title": "RMSE",
+            "metric": "rmse", "ylabel": "Mean trial-level RMSE",
+            "group": rmse_group_col, "low": rmse_lo_col, "high": rmse_hi_col,
+            "reference": 1.0, "lower": 0.0, "upper": None,
+        },
+    )
+
+    for panel in panels:
+        ax = panel["ax"]
+        metric = panel["metric"]
+        all_values = []
+
+        ax.axhline(
+            panel["reference"], color="0.55",
+            ls=(0, (4, 3)) if metric == "r" else ":",
+            lw=0.7, alpha=0.8, zorder=0,
+        )
+
+        for i, ch in enumerate(channels):
+            center = centers[i]
+            pivot = data[ch][metric]
+            paired_n = 0
+
+            # Paired participant observations and individual points.
+            for sid in subjects:
+                if sid not in pivot.index:
+                    continue
+
+                values = pivot.loc[sid, list(conditions)].to_numpy(dtype=float)
+                xs = [center + offsets[k] + jitter[(ch, sid)] for k in range(2)]
+
+                if np.all(np.isfinite(values)):
+                    ax.plot(xs, values, color=pair_color, lw=0.65, alpha=0.55, zorder=1)
+                    paired_n += 1
+
+                for k, value in enumerate(values):
+                    if np.isfinite(value):
+                        ax.scatter(
+                            xs[k], value, s=19, color=colors[k], alpha=0.6,
+                            edgecolors="white", linewidths=0.35, zorder=3,
+                        )
+                        all_values.append(float(value))
+
+            # Population estimates and participant-bootstrap CIs.
+            for k, condition in enumerate(conditions):
+                row = data[ch]["population"].loc[condition]
+                mean = float(row[panel["group"]])
+                lo = float(row[panel["low"]])
+                hi = float(row[panel["high"]])
+
+                if not np.all(np.isfinite([mean, lo, hi])):
+                    continue
+                if lo > mean or hi < mean:
+                    raise ValueError(f"Invalid population CI for {ch}, {condition}, {metric}.")
+
+                ax.errorbar(
+                    center + offsets[k], mean,
+                    yerr=[[mean - lo], [hi - mean]],
+                    fmt="o", ms=8, color="black",
+                    markeredgecolor="white", markeredgewidth=0.5,
+                    capsize=2.8, capthick=0.9, elinewidth=1.0, zorder=5,
+                )
+                all_values.extend([lo, hi])
+
+        # Dynamic limits across all channels.
+        if all_values:
+            lo, hi = min(all_values), max(all_values)
+            span = hi - lo if hi > lo else max(abs(lo), 1.0) * 0.1
+            pad = 0.08 * span
+            lo, hi = lo - pad, hi + pad
+        else:
+            lo, hi = -0.5, 1.0
+
+        lo = max(lo, panel["lower"]) if panel["lower"] is not None else lo
+        hi = min(hi, panel["upper"]) if panel["upper"] is not None else hi
+        ax.set_ylim(lo, hi)
+
+        ax.set_xticks(centers)
+        ax.set_xticklabels(channels)
+        ax.set_xlim(centers[0] - 0.55, centers[-1] + 0.55)
+        ax.set_xlabel("EEG target channel", labelpad=15)
+        ax.set_ylabel(panel["ylabel"])
+        ax.set_title(panel["title"], loc="left", fontsize=10, pad=8)
+        ax.text(-0.08, 1.04, panel["letter"], transform=ax.transAxes,
+                fontsize=13, fontweight="bold", va="bottom", ha="left")
+        ax.grid(axis="y", ls=":", lw=0.55, color="0.88", zorder=0)
+        ax.set_axisbelow(True)
+
+    handles = [
+        Line2D([0], [0], marker="o", color="w", markerfacecolor=colors[0],
+               markeredgecolor="white", markersize=6, label=labels[0]),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor=colors[1],
+               markeredgecolor="white", markersize=6, label=labels[1]),
+        Line2D([0], [0], color=pair_color, lw=1.0, label="Paired participant observations"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="black",
+               markeredgecolor="white", markersize=7,
+               label="Population estimate (95% bootstrap CI)"),
+    ]
+
+    fig.legend(
+        handles=handles, loc="upper center", bbox_to_anchor=(0.5, 1.015),
+        ncol=4, frameon=False, fontsize=7.8,
+        handletextpad=0.4, columnspacing=1.2,
+    )
+    fig.suptitle(
+        f"EOG model versus shuffled-pairing model (N = {len(subjects)} participants)",
+        fontsize=11, y=1.09, color="0.10",
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.90])
+
+    if save_fig:
+        fig.savefig(file_name, dpi=400, bbox_inches="tight", facecolor="white", pad_inches=0.05)
+
+    return fig, axes

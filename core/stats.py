@@ -1197,6 +1197,7 @@ def summarize_trials(
     n_r_valid = int(r_valid.size)
     n_rmse_valid = int(rmse_valid.size)
 
+    n_r_undefined = int(r_trials.size - n_r_valid)
     # ----------------------------------------------------------------
     # 2. Fisher-z pooling at trial level (weight = 1)
     # ----------------------------------------------------------------
@@ -1352,7 +1353,8 @@ def summarize_trials(
         "rmse_mean": float(np.mean(rmse_valid))         if n_rmse_valid       else float(np.nan),
         "rmse_sd":   float(np.std(rmse_valid, ddof=1))  if n_rmse_valid > 1   else float(np.nan),
         "rmse_trial_ci_boot": rmse_ci_boot,             
-
+        "n_r_valid": n_r_valid,
+        "n_r_undefined": n_r_undefined,
         # Descriptive (interface-compatible)
         "band_summary": band_summary,
         "curves_summary": curves_summary,

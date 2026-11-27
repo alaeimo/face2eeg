@@ -2213,7 +2213,7 @@ def plot_main_figure_video_vs_eog(
     ax.set_xlim(-0.55, len(channels) - 0.45)
     ax.set_xlabel("EEG target channel", labelpad=3)
     ax.set_ylabel(r"$\Delta z(r)$: Video $-$ EOG")
-    ax.set_title("b   Incremental correlation over EOG", loc="left", pad=6)
+    ax.set_title("b   Video minus EOG (Fisher-z scale)", loc="left", pad=6)
     ax.grid(axis="y", ls=":", lw=0.5, color="0.9", zorder=0)
 
     # ============================================================
@@ -2322,7 +2322,7 @@ def plot_main_figure_video_vs_eog(
         subject_col_prefix = "coh",
         population_metric  = "Coherence",
         panel_letter = "c",
-        panel_title  = "Incremental coherence over EOG",
+        panel_title  = "Video minus EOG (coherence)",
         ylabel       = r"$\Delta$Coherence: Video $-$ EOG",
     )
 
@@ -2334,7 +2334,7 @@ def plot_main_figure_video_vs_eog(
         subject_col_prefix = "rbp_err",
         population_metric  = "RBP error",
         panel_letter = "d",
-        panel_title  = "Incremental RBP error over EOG",
+        panel_title  = "Video minus EOG (RBP error)",
         ylabel       = r"$\Delta$RBP error: Video $-$ EOG",
     )
 
